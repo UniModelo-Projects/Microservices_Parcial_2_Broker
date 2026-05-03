@@ -9,4 +9,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface OrderClient {
     @PostMapping("/ordenes/retry")
     void retry(@RequestBody Order order);
+
+    @org.springframework.web.bind.annotation.GetMapping("/ordenes/{id}")
+    Order getOrder(@org.springframework.web.bind.annotation.PathVariable("id") String id);
+
+    @org.springframework.web.bind.annotation.PutMapping("/ordenes/{id}/status")
+    void updateStatus(@org.springframework.web.bind.annotation.PathVariable("id") String id, @RequestBody String status);
 }

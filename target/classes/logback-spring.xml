@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+
+    <appender name="CLOUDWATCH" class="ca.pjer.logback.AwsLogsAppender">
+        <layout>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </layout>
+        <logGroupName>broker-log-group</logGroupName>
+        <logStreamName>broker-stream</logStreamName>
+        <logRegion>us-east-1</logRegion>
+        <cloudWatchEndpoint>http://localstack:4566</cloudWatchEndpoint>
+        <accessKeyId>test</accessKeyId>
+        <secretAccessKey>test</secretAccessKey>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="CLOUDWATCH"/>
+    </root>
+</configuration>

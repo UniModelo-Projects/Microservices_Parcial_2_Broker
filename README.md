@@ -1,20 +1,36 @@
-# Broker Service
+# Broker Service - Core Resilience & Orchestration
 
 ## Description
-The core of the retry mechanism. It listens for failed jobs in Kafka and executes a Chain of Responsibility (CoR) to ensure eventual consistency.
+The heart of the system's resilience and business orchestration. Originally designed for retries, it now also manages successful business workflows via an Event-Driven architecture.
 
-## Mechanism
-1. **Listener**: Consumes from `order_retry_jobs`, `payments_retry_jobs`, and `product_retry_jobs`.
-2. **Persistence**: Saves jobs in PostgreSQL (`retry_jobs` table) with `PENDING` status.
-3. **Scheduler**: Runs every 10 seconds to pick up pending jobs.
-4. **Chain of Responsibility**:
-   - **Step A (Creation)**: Retries the original operation in the target service.
-   - **Step B (Email)**: Sends a notification email.
-   - **Step C (Log)**: Logs the operation (placeholder for CloudWatch).
-   - **Step D (Mongo)**: Saves a final tracking record in MongoDB.
+## Responsibilities
 
-## Port
-- Default: `8084`
+### 1. Resilience (Retry Mechanism)
+- **Listeners**: Consumes from `order_retry_jobs`, `payments_retry_jobs`, and `product_retry_jobs`.
+- **Chain of Responsibility**:
+   - **Step A (Creation)**: Retries the original operation via Feign clients.
+   - **Step B (Email)**: Sends error/success notifications.
+   - **Step C (Update)**: Updates SQL tracking record.
+   - **Step D (Mongo)**: Persists final audit in MongoDB.
 
-## Infrastructure Repo
-- [Main Infrastructure & Orchestration](https://github.com/UniModelo-Projects/Vacaciones_Microservices_Infrastructure)
+### 2. Business Orchestration (New Workflows)
+- **PaymentReceivedListener**:
+    - Listens to `payment_received_events`.
+    - Calculates **Pending Balance** for partial payments.
+    - Triggers shipping logic only when the order is 100% paid.
+- **InventoryUpdateListener**:
+    - Listens to `inventory_update_events`.
+    - Automatically reduces stock in Product Service after order creation/modification.
+- **OrderStatusChangedListener**:
+    - Listens to `order_status_changed_events`.
+    - Notifies customers about status updates and registers completed orders for shipping.
+- **ShippingScheduler**:
+    - Runs every 10 seconds to process the `envios` table and send final delivery confirmations.
+
+## Persistence
+- **PostgreSQL**: Stores `retry_jobs`, `envios` (shipping), and `notification_log` (idempotency).
+- **MongoDB**: Stores final audit traces of processed jobs.
+
+## Ports & Communication
+- **Port**: `8084`
+- **Tópicos Kafka**: `payment_received_events`, `inventory_update_events`, `order_status_changed_events`.

@@ -9,4 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface PaymentClient {
     @PostMapping("/pagos/retry")
     void retry(@RequestBody Payment payment);
+
+    @org.springframework.web.bind.annotation.GetMapping("/pagos/orden/{ordenId}")
+    java.util.List<Payment> getPaymentsByOrder(@org.springframework.web.bind.annotation.PathVariable("ordenId") String ordenId);
 }

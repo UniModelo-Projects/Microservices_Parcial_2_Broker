@@ -9,4 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface ProductClient {
     @PostMapping("/productos/retry")
     void retry(@RequestBody Product product);
+
+    @org.springframework.web.bind.annotation.PutMapping("/productos/{id}/stock/reduce")
+    void reduceStock(@org.springframework.web.bind.annotation.PathVariable("id") String id, @org.springframework.web.bind.annotation.RequestParam("quantity") int quantity);
 }
