@@ -22,6 +22,9 @@ public class CreationHandler extends BaseHandler {
     private PaymentClient paymentClient;
     @Autowired
     private RetryJobRepository repository;
+
+    @Autowired
+    private org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -50,7 +53,17 @@ public class CreationHandler extends BaseHandler {
             case "PAYMENTS":
             case "PAYMENT":
                 com.exam.broker.model.Payment payment = objectMapper.convertValue(data, com.exam.broker.model.Payment.class);
-                paymentClient.retry(payment);
+                com.exam.broker.model.Payment savedPayment = paymentClient.retry(payment);
+
+                // NUEVO: Re-inyectar el evento en el flujo de negocio si es un pago exitoso
+                if (savedPayment != null) {
+                    System.out.println("[Step A] Re-injecting payment event for order: " + savedPayment.getOrdenId());
+                    java.util.Map<String, Object> event = new java.util.HashMap<>();
+                    event.put("ordenId", savedPayment.getOrdenId());
+                    event.put("monto", savedPayment.getMonto());
+                    event.put("pagoId", savedPayment.getId());
+                    kafkaTemplate.send("payment_received_events", event);
+                }
                 break;
             default:
                 throw new IllegalArgumentException("Unknown TopicType: " + job.getTopicType());

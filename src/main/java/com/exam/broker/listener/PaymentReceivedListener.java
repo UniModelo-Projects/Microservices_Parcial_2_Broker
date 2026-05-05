@@ -10,7 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -27,6 +28,9 @@ public class PaymentReceivedListener {
 
     @Autowired
     private PaymentClient paymentClient;
+
+    @Autowired
+    private com.exam.broker.client.ProductClient productClient;
 
     @Autowired
     private EnvioRepository envioRepository;
@@ -73,7 +77,7 @@ public class PaymentReceivedListener {
             if (saldoPendiente <= 0) {
                 log.info("Order {} fully paid. Registering for shipping.", ordenId);
                 orderClient.updateStatus(ordenId, "PAGADA");
-                
+
                 Envio envio = new Envio();
                 envio.setOrdenId(ordenId);
                 envio.setClienteEmail("dinocodeadvisor@gmail.com"); // Mock email or fetch from order if available
@@ -89,23 +93,37 @@ public class PaymentReceivedListener {
     }
 
     private void sendPaymentEmail(Order order, double totalPagado, double saldoPendiente) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo("dinocodeadvisor@gmail.com");
-        
-        if (saldoPendiente <= 0) {
-            message.setSubject("✅ Pago Completado - Orden " + order.getId());
-            message.setText("¡Gracias! Tu pago ha sido completado.\n\nTotal Orden: $" + order.getTotal() + "\nTu pedido ha pasado a logística.");
-        } else {
-            message.setSubject("💰 Pago Recibido (Parcial) - Orden " + order.getId());
-            message.setText("Hemos recibido tu abono.\n\nTotal Orden: $" + order.getTotal() + 
-                           "\nTotal Pagado: $" + totalPagado + 
-                           "\nSaldo Pendiente: $" + saldoPendiente + 
-                           "\n\nTu orden se procesará para envío una vez se cubra el total.");
+        StringBuilder itemsList = new StringBuilder("\nProductos en tu orden:\n");
+        for (String pid : order.getProductoIds()) {
+            try {
+                com.exam.broker.model.Product p = productClient.getProduct(pid);
+                if (p != null) {
+                    itemsList.append("- ").append(p.getNombre()).append(": $").append(p.getPrecio()).append("\n");
+                }
+            } catch (Exception e) {
+                itemsList.append("- Producto ID: ").append(pid).append(" (Detalles no disponibles)\n");
+            }
         }
-        
+
         try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo("dinocodeadvisor@gmail.com");
+
+            if (saldoPendiente <= 0) {
+                helper.setSubject("✅ Pago Completado - Orden " + order.getId());
+                helper.setText("¡Gracias! Tu pago ha sido completado.\n" + itemsList + "\nTotal Orden: $" + order.getTotal() + "\nTu pedido ha pasado a logística.");
+            } else {
+                helper.setSubject("💰 Pago Recibido (Parcial) - Orden " + order.getId());
+                helper.setText("Hemos recibido tu abono.\n" + itemsList + "\nTotal Orden: $" + order.getTotal() +
+                               "\nTotal Pagado: $" + totalPagado +
+                               "\nSaldo Pendiente: $" + saldoPendiente +
+                               "\n\nTu orden se procesará para envío una vez se cubra el total.");
+            }
+
             mailSender.send(message);
-            log.info("Payment email sent for order {}", order.getId());
+            log.info("Payment email sent for order {}. Body: {}", order.getId(), helper.getMimeMessage().getContent());
         } catch (Exception e) {
             log.error("Failed to send payment email: {}", e.getMessage());
         }

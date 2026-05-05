@@ -7,7 +7,8 @@ import com.exam.broker.repository.NotificationLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -64,12 +65,18 @@ public class ShippingScheduler {
     }
 
     private void sendShippingEmail(Envio envio) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(envio.getClienteEmail());
-        message.setSubject("🚚 Envío Confirmado - Orden " + envio.getOrdenId());
-        message.setText("Tu orden ha sido procesada por nuestro almacén y está en camino.\n\nID de Orden: " + envio.getOrdenId() + "\n\n¡Gracias por tu compra!");
-        
-        mailSender.send(message);
-        log.info("Shipping confirmation email sent for order {}", envio.getOrdenId());
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(envio.getClienteEmail());
+            helper.setSubject("🚚 Envío Confirmado - Orden " + envio.getOrdenId());
+            helper.setText("Tu orden ha sido procesada por nuestro almacén y está en camino.\n\nID de Orden: " + envio.getOrdenId() + "\n\n¡Gracias por tu compra!");
+
+            mailSender.send(message);
+            log.info("Shipping confirmation email sent for order {}", envio.getOrdenId());
+        } catch (Exception e) {
+            log.error("Failed to send shipping email for order {}: {}", envio.getOrdenId(), e.getMessage());
+        }
     }
 }

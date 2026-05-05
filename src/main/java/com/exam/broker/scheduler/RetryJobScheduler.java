@@ -4,7 +4,8 @@ import com.exam.broker.handler.*;
 import com.exam.broker.model.RetryJob;
 import com.exam.broker.repository.RetryJobRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -28,7 +29,7 @@ public class RetryJobScheduler {
 
     @Autowired
     private MongoHandler mongoHandler;
-    
+
     @Autowired
     private JavaMailSender mailSender;
 
@@ -36,9 +37,9 @@ public class RetryJobScheduler {
     public void processPendingJobs() {
         List<RetryJob> jobs = repository.findByStatusAndNextRunAtBefore("PENDING", LocalDateTime.now());
         if (jobs.isEmpty()) return;
-        
+
         System.out.println("--- Starting scheduler run. Found " + jobs.size() + " jobs ---");
-        
+
         // Build chain: A -> B -> C -> D
         creationHandler.setNext(emailHandler);
         emailHandler.setNext(updateHandler);
@@ -49,7 +50,7 @@ public class RetryJobScheduler {
                 creationHandler.handle(job);
             } catch (Exception e) {
                 System.err.println("Chain failed for job: " + job.getId() + ". Error: " + e.getMessage());
-                
+
                 // Requirement: Send failure email if any step fails
                 sendFailureEmail(job.getTopicType(), e.getMessage());
 
@@ -70,13 +71,16 @@ public class RetryJobScheduler {
             }
         }
     }
-    
+
     private void sendFailureEmail(String topicType, String error) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo("dinocodeadvisor@gmail.com");
-        message.setSubject("❌ " + topicType + " Creation Failed");
-        message.setText("We were unable to process your " + topicType.toLowerCase() + " after several attempts.\n\nFinal Error: " + error);
         try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo("dinocodeadvisor@gmail.com");
+            helper.setSubject("❌ " + topicType + " Creation Failed");
+            helper.setText("We were unable to process your " + topicType.toLowerCase() + " after several attempts.\n\nFinal Error: " + error);
+            
             mailSender.send(message);
         } catch (Exception e) {
             System.err.println("Failed to send failure email: " + e.getMessage());
